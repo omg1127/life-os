@@ -23,6 +23,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Life OS",
   description: "Your goals, beautifully tracked.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Life OS",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
