@@ -10,7 +10,7 @@ import {
   Dumbbell, Home as HomeIcon, GraduationCap, Rocket, Target, Compass,
   TrendingUp, Zap, CheckCircle2, ChevronDown, Send, Trash2, Clock,
   Sun, Moon, ExternalLink, Mic, Inbox, PenLine, Plus, Lock, Trophy,
-  Calendar, AlertCircle, X,
+  Calendar,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +85,13 @@ interface JournalEntry {
   type?: string;
 }
 
+interface WeeklyTarget {
+  id: string;
+  text: string;
+  weekOf: string;
+  hit: boolean;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════════════
@@ -101,6 +108,11 @@ const MOOD_COLORS: Record<Mood, string> = {
   Scattered: "var(--violet)", Low: "var(--rose)",
 };
 
+const MOOD_HEX: Record<Mood, string> = {
+  Clear: "#3dd68c", Energized: "#f5a623", Neutral: "#857d75",
+  Scattered: "#b19cff", Low: "#ff6b7a",
+};
+
 const SAMPLE_AREAS: Area[] = [
   { id: "driving", name: "Driving License", icon: "car", color: "#f5a623" },
   { id: "career", name: "Career", icon: "briefcase", color: "#3dafff" },
@@ -113,7 +125,7 @@ const SAMPLE_PLANS: Plan[] = [
   {
     id: "plan-driving", title: "German Driving License", subtitle: "Klasse B",
     icon: "car", color: "#f5a623", areaId: "driving",
-    play: "Jordan isn’t on Anlage 11 → you need both exams, but zero mandatory hours. That’s your cost lever. Do theory fast, batch the special drives, and sit the practical before summer.",
+    play: "Jordan isn't on Anlage 11 → you need both exams, but zero mandatory hours. That's your cost lever. Do theory fast, batch the special drives, and sit the practical before summer.",
     targetDate: "2026-09-01", createdAt: "2026-04-13",
     phases: [
       {
@@ -194,8 +206,8 @@ const SAMPLE_HABITS: Habit[] = [
 ];
 
 const SAMPLE_JOURNAL: JournalEntry[] = [
-  { id: "j1", date: "2026-04-25", title: "Starting the driving license journey", body: "Finally registered at a Fahrschule today. Feels like one of those things I’ve been putting off forever. The instructor seems solid—speaks English, which helps. Cost is steep but it’s a one-time unlock.", mood: "Energized", type: "Diary" },
-  { id: "j2", date: "2026-04-23", body: "Spent the evening organizing tax documents. Not glamorous but there’s something satisfying about reducing chaos to a neat folder. One less thing hanging over me.", mood: "Clear", type: "Reflection" },
+  { id: "j1", date: "2026-04-25", title: "Starting the driving license journey", body: "Finally registered at a Fahrschule today. Feels like one of those things I've been putting off forever. The instructor seems solid—speaks English, which helps. Cost is steep but it's a one-time unlock.", mood: "Energized", type: "Diary" },
+  { id: "j2", date: "2026-04-23", body: "Spent the evening organizing tax documents. Not glamorous but there's something satisfying about reducing chaos to a neat folder. One less thing hanging over me.", mood: "Clear", type: "Reflection" },
 ];
 
 const SAMPLE_DREAMS = [
@@ -219,6 +231,14 @@ function getLast7Days(): string[] {
     days.push(d.toISOString().split("T")[0]);
   }
   return days;
+}
+
+function getMonday(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split("T")[0];
 }
 
 function daysBetween(a: string, b: string): number {
@@ -415,11 +435,12 @@ function RightNowBlock({ task, area, onOpen, onTick }: {
           {task.cost && <span className="text-[11px] font-mono ml-auto" style={{ color: area.color }}>{task.cost}</span>}
         </div>
       </div>
-      <button onClick={e => { e.stopPropagation(); onTick(); }}
-        className="absolute top-5 right-5 w-11 h-11 rounded-xl flex items-center justify-center active:scale-90 transition-all"
+      <div onClick={e => { e.stopPropagation(); onTick(); }} role="button" tabIndex={0}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onTick(); } }}
+        className="absolute top-5 right-5 w-11 h-11 rounded-xl flex items-center justify-center active:scale-90 transition-all cursor-pointer"
         style={{ backgroundColor: `${area.color}10`, border: `1px solid ${area.color}20` }} aria-label="Mark complete">
         <Circle size={20} strokeWidth={1.5} style={{ color: area.color }} />
-      </button>
+      </div>
     </motion.div>
   );
 }
@@ -428,14 +449,15 @@ function RightNowBlock({ task, area, onOpen, onTick }: {
 // IV.3 — Capture bar
 // ═══════════════════════════════════════════════════════════════════════
 
-function CaptureBar({ areas, onAdd, onJournal, onVoice, defaultAreaId }: {
+function CaptureBar({ areas, onAdd, onJournal, defaultAreaId }: {
   areas: Area[];
   onAdd: (text: string, areaId: string | null, priority: number) => void;
-  onJournal: () => void; onVoice: () => void; defaultAreaId?: string | null;
+  onJournal: () => void; defaultAreaId?: string | null;
 }) {
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(defaultAreaId ?? null);
   const [showPicker, setShowPicker] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevDefault = useRef(defaultAreaId);
   useEffect(() => {
@@ -444,9 +466,22 @@ function CaptureBar({ areas, onAdd, onJournal, onVoice, defaultAreaId }: {
   const submit = () => {
     if (!text.trim()) return;
     let priority = 0; let clean = text.trim();
-    if (clean.startsWith("!!")) { priority = 2; clean = clean.slice(2).trim(); }
-    else if (clean.startsWith("!")) { priority = 1; clean = clean.slice(1).trim(); }
+    if (clean.startsWith("!!") || clean.endsWith("!!")) { priority = 2; clean = clean.replace(/^!!|!!$/g, "").trim(); }
+    else if (clean.startsWith("!") || clean.endsWith("!")) { priority = 1; clean = clean.replace(/^!|!$/g, "").trim(); }
     onAdd(clean, areaId, priority); setText(""); inputRef.current?.focus();
+  };
+  const startListening = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    setIsListening(true);
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e: any) => { const t = e.results[0][0].transcript; setText(prev => prev ? `${prev} ${t}` : t); setIsListening(false); inputRef.current?.focus(); };
+    rec.onerror = () => setIsListening(false);
+    rec.onend = () => setIsListening(false);
+    rec.start();
   };
   const selectedArea = areas.find(a => a.id === areaId);
   return (
@@ -458,9 +493,10 @@ function CaptureBar({ areas, onAdd, onJournal, onVoice, defaultAreaId }: {
         </button>
         <input ref={inputRef} type="text" value={text} onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") submit(); if (e.key === "Escape") inputRef.current?.blur(); }}
-          placeholder="Add anything…  ! = next  !! = now"
+          placeholder="Add anything...  ! = next  !! = now"
           className="flex-1 bg-transparent text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-5)]" />
-        <button onClick={onVoice} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] transition-colors" aria-label="Voice input"><Mic size={15} strokeWidth={1.8} /></button>
+        <button onClick={startListening} className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${isListening ? "mic-pulse" : "text-[var(--text-3)] hover:text-[var(--text)]"}`}
+          style={isListening ? { color: "var(--rose)", backgroundColor: "rgba(255,107,122,0.12)" } : undefined} aria-label="Voice input"><Mic size={15} strokeWidth={1.8} /></button>
         <button onClick={onJournal} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] transition-colors" aria-label="Open journal"><BookOpen size={15} strokeWidth={1.8} /></button>
         <button onClick={submit} disabled={!text.trim()} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-20 active:scale-90"
           style={{ backgroundColor: text.trim() ? "var(--amber)" : "var(--surface-2)", color: text.trim() ? "#0b0908" : "var(--text-4)" }} aria-label="Add"><Send size={14} strokeWidth={2.5} /></button>
@@ -497,7 +533,8 @@ function StepRow({ step, area, onToggle, onEdit, compact }: {
   const stripe = step.priority === 2 ? "border-l-[var(--rose)]" : step.priority === 1 ? "border-l-[var(--amber)]" : "border-l-transparent";
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.2 }}
-      onClick={onEdit}
+      onClick={onEdit} role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEdit(); } }}
       className={`group flex items-start gap-3 px-3 py-2.5 rounded-xl border-l-[3px] ${stripe} transition-all cursor-pointer hover:bg-[var(--surface-2)] active:bg-[var(--surface-3)] ${step.done ? "opacity-45" : ""}`}>
       <button onClick={e => { e.stopPropagation(); handleToggle(); }} className="relative flex-shrink-0 mt-0.5 active:scale-90 transition-transform" aria-label={step.done ? "Mark incomplete" : "Mark complete"}>
         {burst && <div className="absolute inset-0 rounded-full ring-pulse" style={{ border: `2px solid ${area?.color ?? "var(--amber)"}` }} />}
@@ -694,18 +731,28 @@ function PlanCard({ plan, onOpen }: { plan: Plan; onOpen: () => void }) {
   const nextStep = plan.phases.flatMap(p => p.steps).find(s => !s.done);
   const Ic = ICONS[plan.icon] ?? Target;
   const daysActive = daysBetween(plan.createdAt, todayStr()) + 1;
+  const lastCompleted = plan.phases.flatMap(p => p.steps)
+    .filter(s => s.done && s.completedAt)
+    .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))[0];
+  const daysSinceProgress = lastCompleted?.completedAt ? daysBetween(lastCompleted.completedAt, todayStr()) : daysActive;
+  const isStale = daysSinceProgress >= 7 && pct < 1;
+  const daysToTarget = plan.targetDate ? daysBetween(todayStr(), plan.targetDate) : null;
+  const dueUrgent = daysToTarget !== null && daysToTarget <= 14 && daysToTarget > 0 && pct < 1;
   return (
-    <button onClick={onOpen} className="text-left p-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] active:scale-[0.99] transition-all w-full">
+    <button onClick={onOpen} className="text-left p-5 rounded-2xl border bg-[var(--surface)] hover:bg-[var(--surface-2)] active:scale-[0.99] transition-all w-full"
+      style={{ borderColor: dueUrgent ? "var(--rose)" : isStale ? "var(--amber)" : "var(--border)" }}>
       <div className="flex items-start gap-4">
         <RadialProgress value={pct} color={plan.color} size={56} stroke={3.5}>
           <Ic size={18} style={{ color: plan.color }} strokeWidth={1.8} />
         </RadialProgress>
         <div className="flex-1 min-w-0">
           <h3 className="font-serif text-[17px] font-medium leading-tight truncate mb-1">{plan.title}</h3>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-3)] mb-2">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-3)] mb-2 flex-wrap">
             <span style={{ color: plan.color }}>{done}/{total}</span>
             <span className="text-[var(--text-5)]">·</span>
             <span>Day {daysActive}</span>
+            {isStale && <span className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold" style={{ color: "var(--amber)", backgroundColor: "rgba(245,166,35,0.1)" }}>stale</span>}
+            {dueUrgent && <span className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold" style={{ color: "var(--rose)", backgroundColor: "rgba(255,107,122,0.1)" }}>{daysToTarget}d left</span>}
           </div>
           {nextStep && <p className="text-[12px] text-[var(--text-3)] italic line-clamp-1">Next: {nextStep.text}</p>}
         </div>
@@ -794,7 +841,7 @@ function JournalModal({ onClose, onSave }: { onClose: () => void; onSave: (entry
         <div className="w-10 h-1 rounded-full bg-[var(--border)] mx-auto mb-5" />
         <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (optional)" autoFocus
           className="w-full bg-transparent text-[18px] font-serif text-[var(--text)] outline-none pb-3 border-b border-[var(--border)] mb-4 placeholder:text-[var(--text-5)]" />
-        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="What’s on your mind…"
+        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="What's on your mind…"
           className="w-full bg-[var(--surface-2)] text-[15px] font-serif italic text-[var(--text-2)] outline-none px-4 py-3 rounded-xl border border-[var(--border)] min-h-[120px] resize-none placeholder:text-[var(--text-5)] mb-4 leading-[1.7]" />
         <div className="mb-3">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-4)] mb-2">Mood</p>
@@ -845,6 +892,57 @@ function InboxPulse({ count, onTap }: { count: number; onTap: () => void }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Life Pulse — cross-area health check
+// ═══════════════════════════════════════════════════════════════════════
+
+function LifePulse({ areas, plans, allSteps }: {
+  areas: Area[]; plans: Plan[]; allSteps: Step[];
+}) {
+  const weekDays = getLast7Days();
+  const statusColors = { green: "var(--emerald)", amber: "var(--amber)", rose: "var(--rose)" };
+  const pulse = areas.map(a => {
+    const areaSteps = allSteps.filter(s => s.areaId === a.id);
+    const completedThisWeek = areaSteps.filter(s => s.done && s.completedAt && weekDays.includes(s.completedAt)).length;
+    const plan = plans.find(p => p.areaId === a.id);
+
+    const lastCompleted = areaSteps
+      .filter(s => s.done && s.completedAt)
+      .sort((x, y) => (y.completedAt || "").localeCompare(x.completedAt || ""))[0];
+    const daysSinceProgress = lastCompleted?.completedAt ? daysBetween(lastCompleted.completedAt, todayStr()) : 999;
+
+    let status: "green" | "amber" | "rose" = "green";
+    if (daysSinceProgress >= 7) status = "rose";
+    else if (completedThisWeek === 0 && daysSinceProgress >= 3) status = "amber";
+
+    let summary = "";
+    if (plan) {
+      const { pct } = getProgress(plan);
+      summary = `${Math.round(pct * 100)}%`;
+      if (daysSinceProgress >= 7) summary += ` · ${daysSinceProgress}d stale`;
+      else if (completedThisWeek > 0) summary += ` · ${completedThisWeek} this wk`;
+    } else {
+      summary = completedThisWeek > 0 ? `${completedThisWeek} this week` : "no activity";
+    }
+
+    return { ...a, status, summary };
+  });
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 mb-6">
+      <div className="flex flex-col gap-1.5">
+        {pulse.map(p => (
+          <div key={p.id} className="flex items-center gap-2.5">
+            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusColors[p.status] }} />
+            <span className="text-[11px] flex-1 truncate" style={{ color: p.color }}>{p.name}</span>
+            <span className="text-[10px] font-mono text-[var(--text-4)] flex-shrink-0">{p.summary}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // IV.10 — Dreams banner
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -853,7 +951,7 @@ function DreamsBanner({ dreams }: { dreams: string[] }) {
     <div className="text-center py-8 mt-12 border-t border-[var(--border-subtle)]">
       <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[var(--text-5)] mb-3">Why you started</p>
       <div className="font-serif italic text-[14px] text-[var(--text-4)] leading-[1.7] max-w-md mx-auto">
-        {dreams.map((d, i) => <span key={i}>“{d}”{i < dreams.length - 1 ? <br /> : null}</span>)}
+        {dreams.map((d, i) => <span key={i}>{"“"}{d}{"”"}{i < dreams.length - 1 ? <br /> : null}</span>)}
       </div>
     </div>
   );
@@ -936,7 +1034,7 @@ function BottomTabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => v
     { id: "review", label: "Review", icon: TrendingUp },
   ];
   return (
-    <div className="bg-[var(--bg)]/90 backdrop-blur-xl border-t border-[var(--border-subtle)]">
+    <div className="backdrop-blur-xl border-t border-[var(--border-subtle)]" style={{ backgroundColor: "color-mix(in srgb, var(--bg) 90%, transparent)" }}>
       <div className="max-w-xl mx-auto flex items-center justify-around px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {tabs.map(t => {
           const Icon = t.icon; const isActive = active === t.id;
@@ -959,11 +1057,22 @@ function BottomTabs({ active, onChange }: { active: Tab; onChange: (t: Tab) => v
 // IV.11 — Review screen
 // ═══════════════════════════════════════════════════════════════════════
 
-function ReviewScreen({ areas, steps, plans, habits }: {
+function ReviewScreen({ areas, steps, plans, habits, journal, weeklyTargets, onSaveReflection, onSaveCounterfactual, onAddTarget, onToggleTarget }: {
   areas: Area[]; steps: Step[]; plans: Plan[]; habits: Habit[];
+  journal: JournalEntry[]; weeklyTargets: WeeklyTarget[];
+  onSaveReflection: (body: string) => void;
+  onSaveCounterfactual: (body: string) => void;
+  onAddTarget: (text: string) => void;
+  onToggleTarget: (id: string) => void;
 }) {
+  const [reflection, setReflection] = useState("");
+  const [counterfactual, setCounterfactual] = useState("");
+  const [savedR, setSavedR] = useState(false);
+  const [savedC, setSavedC] = useState(false);
+  const [newTarget, setNewTarget] = useState("");
   const allSteps = [...steps, ...plans.flatMap(p => p.phases.flatMap(ph => ph.steps))];
   const weekDays = getLast7Days();
+  const monday = getMonday();
   const weekLabel = (() => {
     const d = new Date(); d.setDate(d.getDate() - 6);
     return `${d.toLocaleDateString("en", { month: "short", day: "numeric" })} – ${new Date().toLocaleDateString("en", { month: "short", day: "numeric" })}`;
@@ -979,15 +1088,80 @@ function ReviewScreen({ areas, steps, plans, habits }: {
     held: weekDays.filter(d => h.history[d] === true).length >= 5,
   }));
 
-  const weekdayInit = ["M", "T", "W", "T", "F", "S", "S"];
+  const moodByDay = weekDays.map(d => {
+    const entry = journal.find(j => j.date === d);
+    return entry?.mood ?? null;
+  });
+
+  const weekdayInit = weekDays.map(d => ["S", "M", "T", "W", "T", "F", "S"][new Date(d + "T12:00:00").getDay()]);
+
+  const thisWeekTargets = weeklyTargets.filter(t => t.weekOf === monday);
+
+  const pastCounterfactuals = journal
+    .filter(j => j.type === "Counterfactual")
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4);
+
+  const handleSaveR = () => {
+    if (!reflection.trim()) return;
+    onSaveReflection(reflection.trim());
+    setReflection("");
+    setSavedR(true);
+    setTimeout(() => setSavedR(false), 2000);
+  };
+
+  const handleSaveC = () => {
+    if (!counterfactual.trim()) return;
+    onSaveCounterfactual(counterfactual.trim());
+    setCounterfactual("");
+    setSavedC(true);
+    setTimeout(() => setSavedC(false), 2000);
+  };
+
+  const handleAddTarget = () => {
+    if (!newTarget.trim()) return;
+    onAddTarget(newTarget.trim());
+    setNewTarget("");
+  };
 
   return (
     <div className="max-w-xl mx-auto px-5 py-8 pb-48">
       <header className="mb-10">
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[var(--text-4)] mb-2">Week of {weekLabel}</p>
         <h1 className="font-serif text-[32px] leading-[1.05] font-semibold tracking-tight mb-3">A look back.</h1>
-        <p className="font-serif italic text-[16px] text-[var(--text-3)] leading-[1.6]">“What worked? What didn’t? What’s next week’s one thing?”</p>
+        <p className="font-serif italic text-[16px] text-[var(--text-3)] leading-[1.6]">{"“What worked? What didn’t? What’s next week’s one thing?”"}</p>
       </header>
+
+      {/* Weekly targets */}
+      <section className="mb-10">
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-4)] mb-4">Weekly targets</p>
+        {thisWeekTargets.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {thisWeekTargets.map(t => (
+              <div key={t.id} className="flex items-center gap-3 group" onClick={() => onToggleTarget(t.id)} role="button" tabIndex={0}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleTarget(t.id); } }}>
+                <div className="w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center flex-shrink-0 transition-all cursor-pointer"
+                  style={{ borderColor: t.hit ? "var(--emerald)" : "var(--text-4)", backgroundColor: t.hit ? "var(--emerald)" : "transparent" }}>
+                  {t.hit && <CheckCircle2 size={12} strokeWidth={2.5} className="text-[var(--bg)]" />}
+                </div>
+                <span className="text-[14px] flex-1" style={{ textDecoration: t.hit ? "line-through" : "none", color: t.hit ? "var(--text-3)" : "var(--text)" }}>{t.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input type="text" value={newTarget} onChange={e => setNewTarget(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleAddTarget(); }}
+            placeholder="Add a target for this week..."
+            className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] outline-none placeholder:text-[var(--text-5)] focus:border-[var(--amber)]" />
+          <button onClick={handleAddTarget} disabled={!newTarget.trim()}
+            className="px-3 py-2 rounded-lg text-[12px] font-mono font-semibold disabled:opacity-25 transition-all"
+            style={{ backgroundColor: "var(--amber)", color: "#0b0908" }}>
+            <Plus size={14} />
+          </button>
+        </div>
+        {thisWeekTargets.length === 0 && <p className="text-[12px] text-[var(--text-5)] mt-2 italic">No targets set yet. What are you aiming for?</p>}
+      </section>
 
       {/* Movement 1 — by area */}
       <section className="mb-10">
@@ -1022,28 +1196,71 @@ function ReviewScreen({ areas, steps, plans, habits }: {
         </div>
       </section>
 
-      {/* Movement 3 — mood placeholder */}
+      {/* Movement 3 — mood from journal */}
       <section className="mb-10">
         <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-4)] mb-4">How you felt</p>
         <div className="flex gap-1.5">
           {weekDays.map((_, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full h-12 rounded-md bg-[var(--surface-2)]" />
+              <div className="w-full h-12 rounded-md transition-colors" style={{
+                backgroundColor: moodByDay[i] ? `${MOOD_HEX[moodByDay[i]!]}25` : "var(--surface-2)",
+                border: moodByDay[i] ? `1px solid ${MOOD_HEX[moodByDay[i]!]}30` : "1px solid transparent",
+              }}>
+                {moodByDay[i] && <div className="w-full h-full flex items-center justify-center text-[9px] font-mono" style={{ color: MOOD_HEX[moodByDay[i]!] }}>{moodByDay[i]![0]}</div>}
+              </div>
               <span className="text-[9px] font-mono text-[var(--text-4)]">{weekdayInit[i]}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Movement 4 — the prompt */}
-      <section className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-6 mb-6">
-        <p className="font-serif italic text-[18px] leading-[1.6] text-[var(--text-2)]">
-          “If you could rerun this week with one thing changed, what would it be?”
-        </p>
+      {/* Movement 4 — reflection */}
+      <section className="mb-6">
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-4)] mb-3">Reflection</p>
+        <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-5 mb-3">
+          <textarea value={reflection} onChange={e => setReflection(e.target.value)}
+            placeholder="If you could rerun this week with one thing changed, what would it be?"
+            className="w-full bg-transparent font-serif italic text-[18px] leading-[1.6] text-[var(--text-2)] resize-none outline-none min-h-[80px] placeholder:text-[var(--text-4)]" />
+        </div>
+        <button onClick={handleSaveR} disabled={!reflection.trim() && !savedR}
+          className="w-full py-3 rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-all disabled:opacity-25"
+          style={{ backgroundColor: savedR ? "var(--emerald)" : "var(--amber)", color: savedR ? "#fff" : "#0b0908" }}>
+          {savedR ? "Saved" : "Save reflection"}
+        </button>
       </section>
-      <button className="w-full py-3.5 rounded-xl text-[14px] font-semibold bg-[var(--amber)] text-[#0b0908] active:scale-[0.98] transition-transform">
-        Save reflection
-      </button>
+
+      {/* Movement 5 — counterfactual */}
+      <section className="mb-10">
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-4)] mb-3">Counterfactual</p>
+        <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-5 mb-3">
+          <textarea value={counterfactual} onChange={e => setCounterfactual(e.target.value)}
+            placeholder="What would you change about this week?"
+            className="w-full bg-transparent font-serif italic text-[16px] leading-[1.6] text-[var(--text-2)] resize-none outline-none min-h-[60px] placeholder:text-[var(--text-4)]" />
+        </div>
+        <button onClick={handleSaveC} disabled={!counterfactual.trim() && !savedC}
+          className="w-full py-3 rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-all disabled:opacity-25"
+          style={{ backgroundColor: savedC ? "var(--emerald)" : "var(--violet)", color: "#fff" }}>
+          {savedC ? "Saved" : "Save counterfactual"}
+        </button>
+      </section>
+
+      {/* "You keep saying..." — patterns from past counterfactuals */}
+      {pastCounterfactuals.length >= 2 && (
+        <section className="mb-10 rounded-2xl border border-[var(--border)] p-5" style={{ background: "linear-gradient(145deg, rgba(177, 156, 255, 0.08), var(--surface) 60%)" }}>
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--violet)] mb-4">You keep saying...</p>
+          <div className="space-y-3">
+            {pastCounterfactuals.map(c => (
+              <div key={c.id} className="flex gap-3 items-start">
+                <div className="w-1 h-1 rounded-full bg-[var(--violet)] mt-2 flex-shrink-0" />
+                <div>
+                  <p className="font-serif italic text-[14px] text-[var(--text-2)] leading-[1.5]">{c.body}</p>
+                  <p className="text-[10px] font-mono text-[var(--text-5)] mt-0.5">{c.date}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -1059,12 +1276,14 @@ export default function Page() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [weeklyTargets, setWeeklyTargets] = useState<WeeklyTarget[]>([]);
   const [dreams] = useState(SAMPLE_DREAMS);
   const [filterArea, setFilterArea] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [editingStep, setEditingStep] = useState<Step | null>(null);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [showJournalModal, setShowJournalModal] = useState(false);
+  const [groupBy, setGroupBy] = useState<"priority" | "plan">("priority");
   const [loaded, setLoaded] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -1072,10 +1291,13 @@ export default function Page() {
 
   useEffect(() => {
     const state = loadState();
-    if (state?.steps) {
-      setSteps(state.steps); setAreas(state.areas || SAMPLE_AREAS);
-      setHabits(state.habits || SAMPLE_HABITS); setPlans(state.plans || SAMPLE_PLANS);
-      setJournal(state.journal || SAMPLE_JOURNAL);
+    if (state) {
+      setSteps(state.steps ?? []);
+      setAreas(state.areas ?? SAMPLE_AREAS);
+      setHabits(state.habits ?? SAMPLE_HABITS);
+      setPlans(state.plans ?? SAMPLE_PLANS);
+      setJournal(state.journal ?? SAMPLE_JOURNAL);
+      setWeeklyTargets(state.weeklyTargets ?? []);
     } else {
       setSteps(SAMPLE_STEPS); setAreas(SAMPLE_AREAS);
       setHabits(SAMPLE_HABITS); setPlans(SAMPLE_PLANS);
@@ -1084,79 +1306,85 @@ export default function Page() {
     setLoaded(true);
   }, []);
 
-  const persist = useCallback((s: Step[], a: Area[], h: Habit[], p: Plan[], j: JournalEntry[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ steps: s, areas: a, habits: h, plans: p, journal: j }));
-  }, []);
+  // ─── Auto-persist on any state change ────────────────────────────
+
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ steps, areas, habits, plans, journal, weeklyTargets }));
+  }, [loaded, steps, areas, habits, plans, journal, weeklyTargets]);
 
   // ─── Actions ─────────────────────────────────────────────────────
 
   const toggleStep = useCallback((id: string) => {
-    setSteps(prev => {
-      const next = prev.map(s => s.id !== id ? s : { ...s, done: !s.done, completedAt: !s.done ? todayStr() : undefined });
-      persist(next, areas, habits, plans, journal); return next;
-    });
-  }, [areas, habits, plans, journal, persist]);
+    setSteps(prev => prev.map(s => s.id !== id ? s : { ...s, done: !s.done, completedAt: !s.done ? todayStr() : undefined }));
+  }, []);
 
   const addStep = useCallback((text: string, areaId: string | null, priority: number) => {
     setSteps(prev => {
       const maxOrder = prev.reduce((m, s) => Math.max(m, s.order), 0);
-      const next = [...prev, { id: uid(), text, done: false, areaId, priority, createdAt: todayStr(), order: maxOrder + 1 }];
-      persist(next, areas, habits, plans, journal); return next;
+      return [...prev, { id: uid(), text, done: false, areaId, priority, createdAt: todayStr(), order: maxOrder + 1 }];
     });
-  }, [areas, habits, plans, journal, persist]);
+  }, []);
 
   const updateStep = useCallback((updated: Step) => {
-    setSteps(prev => { const next = prev.map(s => s.id === updated.id ? updated : s); persist(next, areas, habits, plans, journal); return next; });
+    setSteps(prev => prev.map(s => s.id === updated.id ? updated : s));
     setEditingStep(null);
-  }, [areas, habits, plans, journal, persist]);
+  }, []);
 
   const deleteStep = useCallback((id: string) => {
-    setSteps(prev => { const next = prev.filter(s => s.id !== id); persist(next, areas, habits, plans, journal); return next; });
+    setSteps(prev => prev.filter(s => s.id !== id));
     setEditingStep(null);
-  }, [areas, habits, plans, journal, persist]);
+  }, []);
+
+  const updatePlanStep = useCallback((updated: Step) => {
+    setPlans(prev => prev.map(p => {
+      if (p.id !== updated.planId) return p;
+      return { ...p, phases: p.phases.map(ph => ({ ...ph, steps: ph.steps.map(s => s.id === updated.id ? updated : s) })) };
+    }));
+    setEditingStep(null);
+  }, []);
+
+  const deletePlanStep = useCallback((stepId: string, planId: string) => {
+    setPlans(prev => prev.map(p => {
+      if (p.id !== planId) return p;
+      return { ...p, phases: p.phases.map(ph => ({ ...ph, steps: ph.steps.filter(s => s.id !== stepId) })) };
+    }));
+    setEditingStep(null);
+  }, []);
 
   const togglePlanStep = useCallback((planId: string, stepId: string) => {
-    setPlans(prev => {
-      const next = prev.map(p => {
-        if (p.id !== planId) return p;
-        return { ...p, phases: p.phases.map(ph => ({ ...ph, steps: ph.steps.map(s => s.id !== stepId ? s : { ...s, done: !s.done, completedAt: !s.done ? todayStr() : undefined }) })) };
-      });
-      persist(steps, areas, habits, next, journal); return next;
-    });
-  }, [steps, areas, habits, journal, persist]);
+    setPlans(prev => prev.map(p => {
+      if (p.id !== planId) return p;
+      return { ...p, phases: p.phases.map(ph => ({ ...ph, steps: ph.steps.map(s => s.id !== stepId ? s : { ...s, done: !s.done, completedAt: !s.done ? todayStr() : undefined }) })) };
+    }));
+  }, []);
 
   const togglePhaseExpanded = useCallback((planId: string, phaseId: string) => {
-    setPlans(prev => {
-      const next = prev.map(p => {
-        if (p.id !== planId) return p;
-        return { ...p, phases: p.phases.map(ph => ph.id !== phaseId ? ph : { ...ph, expanded: !ph.expanded }) };
-      });
-      persist(steps, areas, habits, next, journal); return next;
-    });
-  }, [steps, areas, habits, journal, persist]);
+    setPlans(prev => prev.map(p => {
+      if (p.id !== planId) return p;
+      return { ...p, phases: p.phases.map(ph => ph.id !== phaseId ? ph : { ...ph, expanded: !ph.expanded }) };
+    }));
+  }, []);
 
   const toggleHabit = useCallback((id: string) => {
     const today = todayStr();
-    setHabits(prev => {
-      const next = prev.map(h => {
-        if (h.id !== id) return h;
-        const wasDone = h.history[today] === true;
-        const newHistory = { ...h.history, [today]: !wasDone };
-        let streak = 0; const d = new Date();
-        if (wasDone) d.setDate(d.getDate() - 1);
-        for (let i = 0; i < 365; i++) {
-          const ds = d.toISOString().split("T")[0];
-          if ((ds === today ? !wasDone : h.history[ds])) { streak++; d.setDate(d.getDate() - 1); } else break;
-        }
-        return { ...h, history: newHistory, streak, bestStreak: Math.max(h.bestStreak, streak) };
-      });
-      persist(steps, areas, next, plans, journal); return next;
-    });
-  }, [steps, areas, plans, journal, persist]);
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      const wasDone = h.history[today] === true;
+      const newHistory = { ...h.history, [today]: !wasDone };
+      let streak = 0; const d = new Date();
+      if (wasDone) d.setDate(d.getDate() - 1);
+      for (let i = 0; i < 365; i++) {
+        const ds = d.toISOString().split("T")[0];
+        if ((ds === today ? !wasDone : h.history[ds])) { streak++; d.setDate(d.getDate() - 1); } else break;
+      }
+      return { ...h, history: newHistory, streak, bestStreak: Math.max(h.bestStreak, streak) };
+    }));
+  }, []);
 
   const addJournalEntry = useCallback((entry: JournalEntry) => {
-    setJournal(prev => { const next = [entry, ...prev]; persist(steps, areas, habits, plans, next); return next; });
-  }, [steps, areas, habits, plans, persist]);
+    setJournal(prev => [entry, ...prev]);
+  }, []);
 
   // ─── Keyboard shortcuts ──────────────────────────────────────────
 
@@ -1175,23 +1403,24 @@ export default function Page() {
   // ─── Derived state ───────────────────────────────────────────────
 
   const today = todayStr();
-  const allPlanSteps = plans.flatMap(p => p.phases.flatMap(ph => ph.steps));
-  const allSteps = [...steps, ...allPlanSteps];
+  const allPlanSteps = useMemo(() => plans.flatMap(p => p.phases.flatMap(ph => ph.steps)), [plans]);
+  const allSteps = useMemo(() => [...steps, ...allPlanSteps], [steps, allPlanSteps]);
   const doneToday = allSteps.filter(s => s.done && s.completedAt === today).length;
   const doneCount = allSteps.filter(s => s.done).length;
   const totalStreak = habits.reduce((a, h) => a + h.streak, 0);
   const inboxCount = steps.filter(s => s.areaId === null && !s.done).length;
 
   const filteredSteps = useMemo(() => {
-    let list = steps;
-    if (filterArea) list = list.filter(s => s.areaId === filterArea);
+    let list = [...steps, ...allPlanSteps];
+    if (filterArea === "__inbox__") list = list.filter(s => s.areaId === null);
+    else if (filterArea) list = list.filter(s => s.areaId === filterArea);
     if (!showDone) list = list.filter(s => !s.done);
-    return [...list].sort((a, b) => {
+    return list.sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
       if (a.priority !== b.priority) return b.priority - a.priority;
       return a.order - b.order;
     });
-  }, [steps, filterArea, showDone]);
+  }, [steps, allPlanSteps, filterArea, showDone]);
 
   const urgentSteps = filteredSteps.filter(s => s.priority === 2 && !s.done);
   const nextStepsList = filteredSteps.filter(s => s.priority === 1 && !s.done);
@@ -1205,6 +1434,50 @@ export default function Page() {
   const heroArea = heroTask ? areas.find(a => a.id === heroTask.areaId) : null;
 
   const activePlan = activePlanId ? plans.find(p => p.id === activePlanId) : null;
+
+  const uncheckedHabits = habits.filter(h => h.history[today] !== true).length;
+  const shapeParts: string[] = [];
+  if (urgentSteps.length > 0) shapeParts.push(`${urgentSteps.length} urgent`);
+  if (nextStepsList.length > 0) shapeParts.push(`${nextStepsList.length} up next`);
+  if (uncheckedHabits > 0) shapeParts.push(`${uncheckedHabits} habit${uncheckedHabits > 1 ? "s" : ""} left`);
+  const shapeLine = shapeParts.length > 0 ? shapeParts.join(" · ") : "Clear day.";
+
+  const aiNudge = useMemo(() => {
+    const stalePlan = plans.find(p => {
+      const pSteps = p.phases.flatMap(ph => ph.steps);
+      if (pSteps.every(s => s.done)) return false;
+      const last = pSteps.filter(s => s.done && s.completedAt).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))[0];
+      return last?.completedAt ? daysBetween(last.completedAt, todayStr()) >= 7 : daysBetween(p.createdAt, todayStr()) >= 7;
+    });
+    if (stalePlan) return `${stalePlan.title} hasn't moved in a week. 90 minutes today?`;
+    const journalStreak = (() => { let s = 0; for (let i = 0; i < 30; i++) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split("T")[0]; if (journal.find(j => j.date === ds)) s++; else break; } return s; })();
+    if (journalStreak >= 3) return `${journalStreak}-day journal streak. Keep it alive.`;
+    if (uncheckedHabits === 0 && habits.length > 0) return "All habits checked. Now the hard stuff.";
+    if (inboxCount >= 3) return `${inboxCount} items in inbox. 2 minutes to triage?`;
+    if (urgentSteps.length === 0 && backlogSteps.length > 3) return "Nothing urgent. Good day for a backlog sweep.";
+    return null;
+  }, [plans, journal, uncheckedHabits, habits.length, inboxCount, urgentSteps.length, backlogSteps.length]);
+
+  const stepsByPlan = useMemo(() => {
+    const undone = filteredSteps.filter(s => !s.done);
+    const groups: { planId: string | null; planTitle: string; planColor: string; steps: Step[] }[] = [];
+    const planMap = new Map<string | null, Step[]>();
+    for (const s of undone) {
+      const key = s.planId ?? null;
+      if (!planMap.has(key)) planMap.set(key, []);
+      planMap.get(key)!.push(s);
+    }
+    for (const [planId, pSteps] of planMap) {
+      const plan = planId ? plans.find(p => p.id === planId) : null;
+      groups.push({ planId, planTitle: plan?.title ?? "Loose steps", planColor: plan?.color ?? "var(--text-3)", steps: pSteps });
+    }
+    return groups;
+  }, [filteredSteps, plans]);
+
+  const smartToggle = useCallback((id: string) => {
+    const s = [...steps, ...allPlanSteps].find(x => x.id === id);
+    if (s?.planId) togglePlanStep(s.planId, id); else toggleStep(id);
+  }, [steps, allPlanSteps, togglePlanStep, toggleStep]);
 
   // ─── Loading ─────────────────────────────────────────────────────
 
@@ -1224,16 +1497,19 @@ export default function Page() {
   const nowSurface = (
     <div className="max-w-xl lg:max-w-[1100px] mx-auto px-4 lg:px-8 py-6 lg:py-8 pb-48">
       <Header doneToday={doneToday} theme={theme} onToggleTheme={toggleTheme} />
+      <p className="text-[11px] font-mono text-[var(--text-4)] mb-4">{shapeLine}</p>
       <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 mb-4 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button onClick={() => setFilterArea(null)} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
           style={{ backgroundColor: filterArea === null ? "var(--text)" : "var(--surface)", color: filterArea === null ? "var(--bg)" : "var(--text-3)", border: filterArea === null ? "none" : "1px solid var(--border)" }}>All</button>
+        <button onClick={() => setFilterArea(filterArea === "__inbox__" ? null : "__inbox__")} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
+          style={{ backgroundColor: filterArea === "__inbox__" ? "var(--text-3)" : "var(--surface)", color: filterArea === "__inbox__" ? "var(--bg)" : "var(--text-3)", border: filterArea === "__inbox__" ? "none" : "1px solid var(--border)" }}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ""}</button>
         {areas.map(a => (
           <button key={a.id} onClick={() => setFilterArea(filterArea === a.id ? null : a.id)}
             className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all whitespace-nowrap"
             style={filterArea === a.id ? { backgroundColor: a.color, color: "#0b0908" } : { backgroundColor: "var(--surface)", color: "var(--text-3)", border: "1px solid var(--border)" }}>{a.name}</button>
         ))}
       </div>
-      <div className="flex items-center gap-5 text-[11px] font-mono text-[var(--text-3)] mb-6">
+      <div className="flex items-center gap-5 text-[11px] font-mono text-[var(--text-3)] mb-4">
         <span className="flex items-center gap-1.5"><Zap size={11} className="text-[var(--amber)]" /> <span className="text-[var(--text)] font-semibold">{doneToday}</span> today</span>
         <span className="flex items-center gap-1.5"><CheckCircle2 size={11} className="text-[var(--emerald)]" /> <span className="text-[var(--text)] font-semibold">{doneCount}</span>/{allSteps.length}</span>
         {totalStreak > 0 && <span className="flex items-center gap-1.5"><Flame size={11} className="text-[var(--coral)]" /> <span className="text-[var(--text)] font-semibold">{totalStreak}</span> streak</span>}
@@ -1241,25 +1517,44 @@ export default function Page() {
 
       <div className="lg:flex lg:gap-10">
         <div className="flex-1 min-w-0 lg:max-w-[720px]">
+          {aiNudge && <p className="text-[11px] font-mono italic text-[var(--text-3)] mb-4 px-1">{aiNudge}</p>}
           {heroTask && heroArea && <RightNowBlock task={heroTask} area={heroArea} onOpen={() => setEditingStep(heroTask)} onTick={() => { if (heroTask.planId) togglePlanStep(heroTask.planId, heroTask.id); else toggleStep(heroTask.id); }} />}
+          <div className="lg:hidden"><LifePulse areas={areas} plans={plans} allSteps={allSteps} /></div>
           <div className="lg:hidden mb-6"><HabitsStrip habits={habits} onToggle={toggleHabit} /></div>
 
-          <InboxPulse count={inboxCount} onTap={() => setFilterArea(null)} />
+          <InboxPulse count={inboxCount} onTap={() => setFilterArea("__inbox__")} />
 
-          <div className="space-y-1">
-            <StepSection label="Do now" color="var(--rose)" steps={urgentSteps} areas={areas} onToggle={toggleStep} onEdit={setEditingStep} />
-            <StepSection label="Up next" color="var(--amber)" steps={nextStepsList} areas={areas} onToggle={toggleStep} onEdit={setEditingStep} />
-            <StepSection label="Backlog" color="var(--text-4)" steps={backlogSteps} areas={areas} onToggle={toggleStep} onEdit={setEditingStep} />
+          <div className="flex items-center gap-1.5 mb-3 px-1">
+            {(["priority", "plan"] as const).map(g => (
+              <button key={g} onClick={() => setGroupBy(g)} className="px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-md transition-all"
+                style={{ backgroundColor: groupBy === g ? "var(--surface-3)" : "transparent", color: groupBy === g ? "var(--text)" : "var(--text-5)" }}>
+                By {g}
+              </button>
+            ))}
           </div>
+
+          {groupBy === "priority" ? (
+            <div className="space-y-1">
+              <StepSection label="Do now" color="var(--rose)" steps={urgentSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+              <StepSection label="Up next" color="var(--amber)" steps={nextStepsList} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+              <StepSection label="Backlog" color="var(--text-4)" steps={backlogSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {stepsByPlan.map(g => (
+                <StepSection key={g.planId ?? "loose"} label={g.planTitle} color={g.planColor} steps={g.steps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+              ))}
+            </div>
+          )}
 
           {doneCount > 0 && (
             <div className="mt-2">
               <button onClick={() => setShowDone(!showDone)} className="flex items-center gap-2 px-3 py-2 text-[var(--text-5)] hover:text-[var(--text-3)] transition-colors">
-                <CheckCircle2 size={12} /><span className="text-[9px] font-mono uppercase tracking-[0.2em]">Completed ({steps.filter(s => s.done).length})</span>
+                <CheckCircle2 size={12} /><span className="text-[9px] font-mono uppercase tracking-[0.2em]">Completed ({allSteps.filter(s => s.done).length})</span>
                 <motion.div animate={{ rotate: showDone ? 180 : 0 }} transition={{ duration: 0.25 }}><ChevronDown size={12} /></motion.div>
               </button>
               <AnimatePresence mode="popLayout">
-                {doneSteps.map(s => <StepRow key={s.id} step={s} area={areas.find(a => a.id === s.areaId)} onToggle={() => toggleStep(s.id)} onEdit={() => setEditingStep(s)} />)}
+                {doneSteps.map(s => <StepRow key={s.id} step={s} area={areas.find(a => a.id === s.areaId)} onToggle={() => s.planId ? togglePlanStep(s.planId, s.id) : toggleStep(s.id)} onEdit={() => setEditingStep(s)} />)}
               </AnimatePresence>
             </div>
           )}
@@ -1269,7 +1564,10 @@ export default function Page() {
         </div>
 
         <aside className="hidden lg:block w-[320px] flex-shrink-0">
-          <div className="sticky top-8 space-y-5"><HabitsStrip habits={habits} onToggle={toggleHabit} /></div>
+          <div className="sticky top-8 space-y-5">
+            <LifePulse areas={areas} plans={plans} allSteps={allSteps} />
+            <HabitsStrip habits={habits} onToggle={toggleHabit} />
+          </div>
         </aside>
       </div>
     </div>
@@ -1290,7 +1588,7 @@ export default function Page() {
           {plans.map(p => <PlanCard key={p.id} plan={p} onOpen={() => setActivePlanId(p.id)} />)}
         </div>
       ) : (
-        <EmptyState icon={Compass} title="No journeys yet." subtitle={`Start one with the capture bar — type a goal and tap “plan it.”`} />
+        <EmptyState icon={Compass} title="No journeys yet." subtitle={`Start one with the capture bar — type a goal and tap "plan it."`} />
       )}
     </div>
   );
@@ -1341,7 +1639,12 @@ export default function Page() {
   // Review surface
   // ═══════════════════════════════════════════════════════════════════
 
-  const reviewSurface = <ReviewScreen areas={areas} steps={steps} plans={plans} habits={habits} />;
+  const reviewSurface = <ReviewScreen areas={areas} steps={steps} plans={plans} habits={habits} journal={journal}
+    weeklyTargets={weeklyTargets}
+    onSaveReflection={(body) => addJournalEntry({ id: uid(), date: todayStr(), body, type: "Reflection", title: "Weekly reflection" })}
+    onSaveCounterfactual={(body) => addJournalEntry({ id: uid(), date: todayStr(), body, type: "Counterfactual", title: "Counterfactual" })}
+    onAddTarget={(text) => setWeeklyTargets(prev => [...prev, { id: uid(), text, weekOf: getMonday(), hit: false }])}
+    onToggleTarget={(id) => setWeeklyTargets(prev => prev.map(t => t.id === id ? { ...t, hit: !t.hit } : t))} />;
 
   const surfaces: Record<Tab, React.ReactNode> = {
     now: nowSurface, plans: plansSurface, habits: habitsSurface,
@@ -1354,7 +1657,7 @@ export default function Page() {
 
   return (
     <div className="min-h-screen relative safe-top">
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
           {surfaces[tab]}
         </motion.div>
@@ -1364,14 +1667,17 @@ export default function Page() {
         <div className="h-24 bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/95 to-transparent pointer-events-none" />
         <div className="bg-[var(--bg)] px-4 pb-3">
           <div className="max-w-xl lg:max-w-[720px] mx-auto">
-            <CaptureBar areas={areas} onAdd={addStep} onJournal={() => setShowJournalModal(true)} onVoice={() => {}} defaultAreaId={filterArea} />
+            <CaptureBar areas={areas} onAdd={addStep} onJournal={() => setShowJournalModal(true)} defaultAreaId={filterArea === "__inbox__" ? null : filterArea} />
           </div>
         </div>
         <BottomTabs active={tab} onChange={(t) => { setTab(t); setActivePlanId(null); }} />
       </div>
 
       <AnimatePresence>
-        {editingStep && <EditDrawer step={editingStep} areas={areas} onSave={updateStep} onDelete={() => deleteStep(editingStep.id)} onClose={() => setEditingStep(null)} />}
+        {editingStep && <EditDrawer step={editingStep} areas={areas}
+          onSave={editingStep.planId ? updatePlanStep : updateStep}
+          onDelete={() => editingStep.planId ? deletePlanStep(editingStep.id, editingStep.planId!) : deleteStep(editingStep.id)}
+          onClose={() => setEditingStep(null)} />}
       </AnimatePresence>
       <AnimatePresence>
         {showJournalModal && <JournalModal onClose={() => setShowJournalModal(false)} onSave={addJournalEntry} />}
