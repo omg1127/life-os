@@ -10,7 +10,7 @@ import {
   Dumbbell, Home as HomeIcon, GraduationCap, Rocket, Target, Compass,
   TrendingUp, Zap, CheckCircle2, ChevronDown, Send, Trash2, Clock,
   Sun, Moon, ExternalLink, Mic, Inbox, PenLine, Plus, Lock, Trophy,
-  Calendar,
+  Calendar, LogOut,
   type LucideIcon,
 } from "lucide-react";
 
@@ -379,8 +379,8 @@ function EmptyState({ icon: Icon, title, subtitle }: {
 // IV.1 — Header
 // ═══════════════════════════════════════════════════════════════════════
 
-function Header({ doneToday, theme, onToggleTheme }: {
-  doneToday: number; theme: "dark" | "light"; onToggleTheme: () => void;
+function Header({ doneToday, theme, onToggleTheme, syncStatus }: {
+  doneToday: number; theme: "dark" | "light"; onToggleTheme: () => void; syncStatus: "idle" | "syncing" | "saved" | "error" | "offline";
 }) {
   const now = new Date();
   const hour = now.getHours();
@@ -390,9 +390,22 @@ function Header({ doneToday, theme, onToggleTheme }: {
     <header className="mb-8">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[var(--text-4)]">{dateStr}</p>
-        <button onClick={onToggleTheme} className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors" aria-label="Toggle theme">
-          {theme === "dark" ? <Sun size={15} strokeWidth={1.8} /> : <Moon size={15} strokeWidth={1.8} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {syncStatus !== "idle" && (
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{
+              color: syncStatus === "saved" ? "var(--emerald)" : syncStatus === "error" ? "var(--rose)" : syncStatus === "offline" ? "var(--amber)" : "var(--text-4)",
+              backgroundColor: syncStatus === "saved" ? "rgba(61,214,140,0.1)" : syncStatus === "error" ? "rgba(255,107,122,0.1)" : syncStatus === "offline" ? "rgba(245,166,35,0.1)" : "rgba(133,125,117,0.1)",
+            }}>
+              {syncStatus === "syncing" ? "syncing..." : syncStatus === "saved" ? "saved" : syncStatus === "offline" ? "offline" : "error"}
+            </span>
+          )}
+          <button onClick={onToggleTheme} className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors" aria-label="Toggle theme">
+            {theme === "dark" ? <Sun size={15} strokeWidth={1.8} /> : <Moon size={15} strokeWidth={1.8} />}
+          </button>
+          <button onClick={() => { fetch("/api/auth", { method: "DELETE" }).then(() => { window.location.href = "/login"; }); }} className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-5)] hover:text-[var(--rose)] transition-colors" aria-label="Log out">
+            <LogOut size={14} strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
       <h1 className="font-serif text-[32px] lg:text-[36px] leading-[1.05] font-semibold tracking-tight">
         {greeting}, <span className="italic text-[var(--text-2)]">Owais</span>.
@@ -449,10 +462,10 @@ function RightNowBlock({ task, area, onOpen, onTick }: {
 // IV.3 — Capture bar
 // ═══════════════════════════════════════════════════════════════════════
 
-function CaptureBar({ areas, onAdd, onJournal, defaultAreaId }: {
+function CaptureBar({ areas, onAdd, onJournal, defaultAreaId, compact }: {
   areas: Area[];
   onAdd: (text: string, areaId: string | null, priority: number) => void;
-  onJournal: () => void; defaultAreaId?: string | null;
+  onJournal: () => void; defaultAreaId?: string | null; compact?: boolean;
 }) {
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(defaultAreaId ?? null);
@@ -487,7 +500,7 @@ function CaptureBar({ areas, onAdd, onJournal, defaultAreaId }: {
   return (
     <div className="relative">
       <div className="flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] focus-within:border-[var(--text-4)] transition-colors shadow-[0_8px_24px_-8px_rgba(0,0,0,0.4)]">
-        <button onClick={() => setShowPicker(!showPicker)} className="flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-mono transition-all active:scale-95"
+        <button onClick={() => setShowPicker(!showPicker)} className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-mono transition-all active:scale-95 max-w-[90px] truncate"
           style={{ color: selectedArea?.color ?? "var(--text-3)", backgroundColor: selectedArea ? `${selectedArea.color}10` : "var(--surface-2)", border: `1px solid ${selectedArea ? `${selectedArea.color}20` : "var(--border)"}` }}>
           {selectedArea?.name ?? "Inbox"}
         </button>
@@ -495,10 +508,10 @@ function CaptureBar({ areas, onAdd, onJournal, defaultAreaId }: {
           onKeyDown={e => { if (e.key === "Enter") submit(); if (e.key === "Escape") inputRef.current?.blur(); }}
           placeholder="Add anything...  ! = next  !! = now"
           className="flex-1 bg-transparent text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-5)]" />
-        <button onClick={startListening} className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${isListening ? "mic-pulse" : "text-[var(--text-3)] hover:text-[var(--text)]"}`}
+        <button onClick={startListening} className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isListening ? "mic-pulse" : "text-[var(--text-3)] hover:text-[var(--text)]"}`}
           style={isListening ? { color: "var(--rose)", backgroundColor: "rgba(255,107,122,0.12)" } : undefined} aria-label="Voice input"><Mic size={15} strokeWidth={1.8} /></button>
-        <button onClick={onJournal} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] transition-colors" aria-label="Open journal"><BookOpen size={15} strokeWidth={1.8} /></button>
-        <button onClick={submit} disabled={!text.trim()} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-20 active:scale-90"
+        {!compact && <button onClick={onJournal} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] transition-colors" aria-label="Open journal"><BookOpen size={15} strokeWidth={1.8} /></button>}
+        <button onClick={submit} disabled={!text.trim()} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-20 active:scale-90"
           style={{ backgroundColor: text.trim() ? "var(--amber)" : "var(--surface-2)", color: text.trim() ? "#0b0908" : "var(--text-4)" }} aria-label="Add"><Send size={14} strokeWidth={2.5} /></button>
       </div>
       <AnimatePresence>
@@ -1284,10 +1297,59 @@ export default function Page() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [showJournalModal, setShowJournalModal] = useState(false);
   const [groupBy, setGroupBy] = useState<"priority" | "plan">("priority");
+  const [showCapture, setShowCapture] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
 
-  // ─── Persistence ─────────────────────────────────────────────────
+  // ─── Persistence (offline-first) ──────────────────────────────────
+
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "saved" | "error" | "offline">("idle");
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipCloudSync = useRef(false);
+  const pendingSync = useRef(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => { setIsOnline(false); setSyncStatus("offline"); };
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+
+  const syncToCloud = useCallback((payload: Record<string, unknown>) => {
+    if (!navigator.onLine) {
+      pendingSync.current = true;
+      localStorage.setItem("life-os-pending-sync", "1");
+      setSyncStatus("offline");
+      return;
+    }
+    setSyncStatus("syncing");
+    fetch("/api/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(r => r.json()).then(res => {
+      pendingSync.current = false;
+      localStorage.removeItem("life-os-pending-sync");
+      setSyncStatus(res.ok ? "saved" : "error");
+      setTimeout(() => setSyncStatus("idle"), 2000);
+    }).catch(() => {
+      pendingSync.current = true;
+      localStorage.setItem("life-os-pending-sync", "1");
+      setSyncStatus("offline");
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isOnline || !loaded) return;
+    if (pendingSync.current || localStorage.getItem("life-os-pending-sync")) {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try { syncToCloud(JSON.parse(raw)); } catch {}
+      }
+    }
+  }, [isOnline, loaded, syncToCloud]);
 
   useEffect(() => {
     const state = loadState();
@@ -1304,14 +1366,35 @@ export default function Page() {
       setJournal(SAMPLE_JOURNAL);
     }
     setLoaded(true);
+    if (navigator.onLine) {
+      fetch("/api/state").then(r => r.json()).then(res => {
+        if (res.ok && res.state) {
+          skipCloudSync.current = true;
+          const s = res.state;
+          if (s.steps?.length) setSteps(s.steps);
+          if (s.areas?.length) setAreas(s.areas);
+          if (s.habits?.length) setHabits(s.habits);
+          if (s.plans?.length) setPlans(s.plans);
+          if (s.journal?.length) setJournal(s.journal);
+          if (s.weeklyTargets?.length) setWeeklyTargets(s.weeklyTargets);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+          setTimeout(() => { skipCloudSync.current = false; }, 500);
+        }
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Auto-persist on any state change ────────────────────────────
 
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ steps, areas, habits, plans, journal, weeklyTargets }));
-  }, [loaded, steps, areas, habits, plans, journal, weeklyTargets]);
+    const payload = { steps, areas, habits, plans, journal, weeklyTargets };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (skipCloudSync.current) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => syncToCloud(payload), 2000);
+  }, [loaded, steps, areas, habits, plans, journal, weeklyTargets, syncToCloud]);
 
   // ─── Actions ─────────────────────────────────────────────────────
 
@@ -1386,6 +1469,14 @@ export default function Page() {
     setJournal(prev => [entry, ...prev]);
   }, []);
 
+  // ─── Dismiss capture bar on scroll ─────────────────────────────
+  useEffect(() => {
+    if (!showCapture) return;
+    const dismiss = () => setShowCapture(false);
+    window.addEventListener("scroll", dismiss, { passive: true, once: true });
+    return () => window.removeEventListener("scroll", dismiss);
+  }, [showCapture]);
+
   // ─── Keyboard shortcuts ──────────────────────────────────────────
 
   useEffect(() => {
@@ -1395,6 +1486,7 @@ export default function Page() {
       const tabKeys: Record<string, Tab> = { "1": "now", "2": "plans", "3": "habits", "4": "journal", "5": "review" };
       if (tabKeys[e.key]) { setTab(tabKeys[e.key]); e.preventDefault(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); document.querySelector<HTMLInputElement>('input[placeholder*="Add anything"]')?.focus(); }
+      if (e.key === "Escape") setShowCapture(false);
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
@@ -1428,9 +1520,11 @@ export default function Page() {
   const doneSteps = showDone ? filteredSteps.filter(s => s.done) : [];
 
   const heroTask = useMemo(() => {
-    const all = [...steps, ...allPlanSteps].filter(s => !s.done);
+    let all = [...steps, ...allPlanSteps].filter(s => !s.done);
+    if (filterArea === "__inbox__") all = all.filter(s => s.areaId === null);
+    else if (filterArea) all = all.filter(s => s.areaId === filterArea);
     return all.find(s => s.priority === 2) ?? all.find(s => s.priority === 1) ?? null;
-  }, [steps, allPlanSteps]);
+  }, [steps, allPlanSteps, filterArea]);
   const heroArea = heroTask ? areas.find(a => a.id === heroTask.areaId) : null;
 
   const activePlan = activePlanId ? plans.find(p => p.id === activePlanId) : null;
@@ -1439,10 +1533,12 @@ export default function Page() {
   const shapeParts: string[] = [];
   if (urgentSteps.length > 0) shapeParts.push(`${urgentSteps.length} urgent`);
   if (nextStepsList.length > 0) shapeParts.push(`${nextStepsList.length} up next`);
-  if (uncheckedHabits > 0) shapeParts.push(`${uncheckedHabits} habit${uncheckedHabits > 1 ? "s" : ""} left`);
-  const shapeLine = shapeParts.length > 0 ? shapeParts.join(" · ") : "Clear day.";
+  if (backlogSteps.length > 0 && filterArea) shapeParts.push(`${backlogSteps.length} backlog`);
+  if (!filterArea && uncheckedHabits > 0) shapeParts.push(`${uncheckedHabits} habit${uncheckedHabits > 1 ? "s" : ""} left`);
+  const shapeLine = shapeParts.length > 0 ? shapeParts.join(" · ") : (filterArea ? "All clear here." : "Clear day.");
 
   const aiNudge = useMemo(() => {
+    if (filterArea) return null;
     const stalePlan = plans.find(p => {
       const pSteps = p.phases.flatMap(ph => ph.steps);
       if (pSteps.every(s => s.done)) return false;
@@ -1456,7 +1552,7 @@ export default function Page() {
     if (inboxCount >= 3) return `${inboxCount} items in inbox. 2 minutes to triage?`;
     if (urgentSteps.length === 0 && backlogSteps.length > 3) return "Nothing urgent. Good day for a backlog sweep.";
     return null;
-  }, [plans, journal, uncheckedHabits, habits.length, inboxCount, urgentSteps.length, backlogSteps.length]);
+  }, [plans, journal, uncheckedHabits, habits.length, inboxCount, urgentSteps.length, backlogSteps.length, filterArea]);
 
   const stepsByPlan = useMemo(() => {
     const undone = filteredSteps.filter(s => !s.done);
@@ -1496,79 +1592,117 @@ export default function Page() {
 
   const nowSurface = (
     <div className="max-w-xl lg:max-w-[1100px] mx-auto px-4 lg:px-8 py-6 lg:py-8 pb-48">
-      <Header doneToday={doneToday} theme={theme} onToggleTheme={toggleTheme} />
+      <Header doneToday={doneToday} theme={theme} onToggleTheme={toggleTheme} syncStatus={syncStatus} />
       <p className="text-[11px] font-mono text-[var(--text-4)] mb-4">{shapeLine}</p>
       <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 mb-4 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button onClick={() => setFilterArea(null)} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
+        <button onClick={() => { setFilterArea(null); setShowCapture(false); }} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
           style={{ backgroundColor: filterArea === null ? "var(--text)" : "var(--surface)", color: filterArea === null ? "var(--bg)" : "var(--text-3)", border: filterArea === null ? "none" : "1px solid var(--border)" }}>All</button>
-        <button onClick={() => setFilterArea(filterArea === "__inbox__" ? null : "__inbox__")} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
+        <button onClick={() => { setFilterArea(filterArea === "__inbox__" ? null : "__inbox__"); setShowCapture(false); }} className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all"
           style={{ backgroundColor: filterArea === "__inbox__" ? "var(--text-3)" : "var(--surface)", color: filterArea === "__inbox__" ? "var(--bg)" : "var(--text-3)", border: filterArea === "__inbox__" ? "none" : "1px solid var(--border)" }}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ""}</button>
         {areas.map(a => (
-          <button key={a.id} onClick={() => setFilterArea(filterArea === a.id ? null : a.id)}
+          <button key={a.id} onClick={() => { setFilterArea(filterArea === a.id ? null : a.id); setShowCapture(false); }}
             className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all whitespace-nowrap"
             style={filterArea === a.id ? { backgroundColor: a.color, color: "#0b0908" } : { backgroundColor: "var(--surface)", color: "var(--text-3)", border: "1px solid var(--border)" }}>{a.name}</button>
         ))}
       </div>
-      <div className="flex items-center gap-5 text-[11px] font-mono text-[var(--text-3)] mb-4">
-        <span className="flex items-center gap-1.5"><Zap size={11} className="text-[var(--amber)]" /> <span className="text-[var(--text)] font-semibold">{doneToday}</span> today</span>
-        <span className="flex items-center gap-1.5"><CheckCircle2 size={11} className="text-[var(--emerald)]" /> <span className="text-[var(--text)] font-semibold">{doneCount}</span>/{allSteps.length}</span>
-        {totalStreak > 0 && <span className="flex items-center gap-1.5"><Flame size={11} className="text-[var(--coral)]" /> <span className="text-[var(--text)] font-semibold">{totalStreak}</span> streak</span>}
-      </div>
+      {filterArea && filterArea !== "__inbox__" && (() => {
+        const fa = areas.find(a => a.id === filterArea);
+        if (!fa) return null;
+        const FaIc = ICONS[fa.icon] ?? Target;
+        const areaSteps = [...steps, ...allPlanSteps].filter(s => s.areaId === fa.id);
+        const areaDone = areaSteps.filter(s => s.done).length;
+        const areaTotal = areaSteps.length;
+        const areaPlan = plans.find(p => p.areaId === fa.id);
+        const areaPct = areaPlan ? getProgress(areaPlan).pct : (areaTotal > 0 ? areaDone / areaTotal : 0);
+        return (
+          <div className="rounded-2xl p-4 mb-4" style={{ background: `linear-gradient(145deg, ${fa.color}12 0%, var(--surface) 60%)`, border: `1px solid ${fa.color}20` }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${fa.color}15` }}>
+                <FaIc size={18} style={{ color: fa.color }} strokeWidth={1.8} />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-serif text-[18px] font-semibold" style={{ color: fa.color }}>{fa.name}</h2>
+                <p className="text-[11px] font-mono text-[var(--text-3)] mt-0.5">
+                  {areaTotal > 0
+                    ? <>{areaDone}/{areaTotal} done{areaPlan && <span style={{ color: fa.color }}> · {Math.round(areaPct * 100)}%</span>}</>
+                    : "No steps yet"}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {!filterArea && (
+        <div className="flex items-center gap-5 text-[11px] font-mono text-[var(--text-3)] mb-4">
+          <span className="flex items-center gap-1.5"><Zap size={11} className="text-[var(--amber)]" /> <span className="text-[var(--text)] font-semibold">{doneToday}</span> today</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 size={11} className="text-[var(--emerald)]" /> <span className="text-[var(--text)] font-semibold">{doneCount}</span>/{allSteps.length}</span>
+          {totalStreak > 0 && <span className="flex items-center gap-1.5"><Flame size={11} className="text-[var(--coral)]" /> <span className="text-[var(--text)] font-semibold">{totalStreak}</span> streak</span>}
+        </div>
+      )}
 
       <div className="lg:flex lg:gap-10">
         <div className="flex-1 min-w-0 lg:max-w-[720px]">
           {aiNudge && <p className="text-[11px] font-mono italic text-[var(--text-3)] mb-4 px-1">{aiNudge}</p>}
           {heroTask && heroArea && <RightNowBlock task={heroTask} area={heroArea} onOpen={() => setEditingStep(heroTask)} onTick={() => { if (heroTask.planId) togglePlanStep(heroTask.planId, heroTask.id); else toggleStep(heroTask.id); }} />}
-          <div className="lg:hidden"><LifePulse areas={areas} plans={plans} allSteps={allSteps} /></div>
-          <div className="lg:hidden mb-6"><HabitsStrip habits={habits} onToggle={toggleHabit} /></div>
+          {!filterArea && <div className="lg:hidden"><LifePulse areas={areas} plans={plans} allSteps={allSteps} /></div>}
+          {!filterArea && <div className="lg:hidden mb-6"><HabitsStrip habits={habits} onToggle={toggleHabit} /></div>}
 
-          <InboxPulse count={inboxCount} onTap={() => setFilterArea("__inbox__")} />
+          {!filterArea && <InboxPulse count={inboxCount} onTap={() => setFilterArea("__inbox__")} />}
 
-          <div className="flex items-center gap-1.5 mb-3 px-1">
-            {(["priority", "plan"] as const).map(g => (
-              <button key={g} onClick={() => setGroupBy(g)} className="px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-md transition-all"
-                style={{ backgroundColor: groupBy === g ? "var(--surface-3)" : "transparent", color: groupBy === g ? "var(--text)" : "var(--text-5)" }}>
-                By {g}
-              </button>
-            ))}
-          </div>
+          {filteredSteps.filter(s => !s.done).length > 0 && (
+            <>
+              <div className="flex items-center gap-1.5 mb-3 px-1">
+                {(["priority", "plan"] as const).map(g => (
+                  <button key={g} onClick={() => setGroupBy(g)} className="px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-md transition-all"
+                    style={{ backgroundColor: groupBy === g ? "var(--surface-3)" : "transparent", color: groupBy === g ? "var(--text)" : "var(--text-5)" }}>
+                    By {g}
+                  </button>
+                ))}
+              </div>
 
-          {groupBy === "priority" ? (
-            <div className="space-y-1">
-              <StepSection label="Do now" color="var(--rose)" steps={urgentSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
-              <StepSection label="Up next" color="var(--amber)" steps={nextStepsList} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
-              <StepSection label="Backlog" color="var(--text-4)" steps={backlogSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {stepsByPlan.map(g => (
-                <StepSection key={g.planId ?? "loose"} label={g.planTitle} color={g.planColor} steps={g.steps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
-              ))}
-            </div>
+              {groupBy === "priority" ? (
+                <div className="space-y-1">
+                  <StepSection label="Do now" color="var(--rose)" steps={urgentSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+                  <StepSection label="Up next" color="var(--amber)" steps={nextStepsList} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+                  <StepSection label="Backlog" color="var(--text-4)" steps={backlogSteps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {stepsByPlan.map(g => (
+                    <StepSection key={g.planId ?? "loose"} label={g.planTitle} color={g.planColor} steps={g.steps} areas={areas} onToggle={smartToggle} onEdit={setEditingStep} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {doneCount > 0 && (
-            <div className="mt-2">
-              <button onClick={() => setShowDone(!showDone)} className="flex items-center gap-2 px-3 py-2 text-[var(--text-5)] hover:text-[var(--text-3)] transition-colors">
-                <CheckCircle2 size={12} /><span className="text-[9px] font-mono uppercase tracking-[0.2em]">Completed ({allSteps.filter(s => s.done).length})</span>
-                <motion.div animate={{ rotate: showDone ? 180 : 0 }} transition={{ duration: 0.25 }}><ChevronDown size={12} /></motion.div>
-              </button>
-              <AnimatePresence mode="popLayout">
-                {doneSteps.map(s => <StepRow key={s.id} step={s} area={areas.find(a => a.id === s.areaId)} onToggle={() => s.planId ? togglePlanStep(s.planId, s.id) : toggleStep(s.id)} onEdit={() => setEditingStep(s)} />)}
-              </AnimatePresence>
-            </div>
-          )}
+          {(() => {
+            const filteredDone = allSteps.filter(s => s.done && (filterArea === "__inbox__" ? s.areaId === null : filterArea ? s.areaId === filterArea : true));
+            return filteredDone.length > 0 ? (
+              <div className="mt-2">
+                <button onClick={() => setShowDone(!showDone)} className="flex items-center gap-2 px-3 py-2 text-[var(--text-5)] hover:text-[var(--text-3)] transition-colors">
+                  <CheckCircle2 size={12} /><span className="text-[9px] font-mono uppercase tracking-[0.2em]">Completed ({filteredDone.length})</span>
+                  <motion.div animate={{ rotate: showDone ? 180 : 0 }} transition={{ duration: 0.25 }}><ChevronDown size={12} /></motion.div>
+                </button>
+                <AnimatePresence mode="popLayout">
+                  {doneSteps.map(s => <StepRow key={s.id} step={s} area={areas.find(a => a.id === s.areaId)} onToggle={() => s.planId ? togglePlanStep(s.planId, s.id) : toggleStep(s.id)} onEdit={() => setEditingStep(s)} />)}
+                </AnimatePresence>
+              </div>
+            ) : null;
+          })()}
 
           {filteredSteps.filter(s => !s.done).length === 0 && <EmptyState icon={Sparkles} title={filterArea ? "All clear here." : "Nothing on your plate."} subtitle={filterArea ? undefined : "Capture something below."} />}
-          <DreamsBanner dreams={dreams} />
+          {!filterArea && <DreamsBanner dreams={dreams} />}
         </div>
 
-        <aside className="hidden lg:block w-[320px] flex-shrink-0">
-          <div className="sticky top-8 space-y-5">
-            <LifePulse areas={areas} plans={plans} allSteps={allSteps} />
-            <HabitsStrip habits={habits} onToggle={toggleHabit} />
-          </div>
-        </aside>
+        {!filterArea && (
+          <aside className="hidden lg:block w-[320px] flex-shrink-0">
+            <div className="sticky top-8 space-y-5">
+              <LifePulse areas={areas} plans={plans} allSteps={allSteps} />
+              <HabitsStrip habits={habits} onToggle={toggleHabit} />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -1665,12 +1799,31 @@ export default function Page() {
 
       <div className="fixed bottom-0 inset-x-0 z-40">
         <div className="h-24 bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/95 to-transparent pointer-events-none" />
-        <div className="bg-[var(--bg)] px-4 pb-3">
-          <div className="max-w-xl lg:max-w-[720px] mx-auto">
+        <AnimatePresence>
+          {showCapture && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.2 }}
+              className="bg-[var(--bg)] px-4 pb-3 lg:hidden">
+              <div className="max-w-xl mx-auto">
+                <CaptureBar areas={areas} onAdd={(t, a, p) => { addStep(t, a, p); setShowCapture(false); }} onJournal={() => { setShowJournalModal(true); setShowCapture(false); }} defaultAreaId={filterArea === "__inbox__" ? null : filterArea} compact />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {!showCapture && (
+          <div className="lg:hidden absolute -top-14 right-4">
+            <button onClick={() => setShowCapture(true)}
+              className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+              style={{ backgroundColor: "var(--amber)", color: "#0b0908" }} aria-label="Add">
+              <Plus size={22} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
+        <div className="hidden lg:block bg-[var(--bg)] px-4 pb-3">
+          <div className="max-w-[720px] mx-auto">
             <CaptureBar areas={areas} onAdd={addStep} onJournal={() => setShowJournalModal(true)} defaultAreaId={filterArea === "__inbox__" ? null : filterArea} />
           </div>
         </div>
-        <BottomTabs active={tab} onChange={(t) => { setTab(t); setActivePlanId(null); }} />
+        <BottomTabs active={tab} onChange={(t) => { setTab(t); setActivePlanId(null); setShowCapture(false); }} />
       </div>
 
       <AnimatePresence>

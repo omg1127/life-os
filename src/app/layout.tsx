@@ -55,6 +55,7 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("life-os-theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}` }} />
+        <script dangerouslySetInnerHTML={{ __html: `if("serviceWorker"in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js")})}` }} />
       </head>
       <body className="min-h-full flex flex-col grain ambient-glow relative">
         {children}
