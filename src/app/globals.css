@@ -1,26 +1,196 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ═══════════════════════════════════════════════════════════
+   Field Notebook — Global Foundations
+   Source of truth: DESIGN.md §III
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Dark theme (default) ─── */
+:root, :root[data-theme="dark"] {
+  --bg: #0b0908;
+  --bg-2: #120f0d;
+  --surface: #1a1614;
+  --surface-2: #221d1a;
+  --surface-3: #2a2422;
+  --border: #2a2422;
+  --border-subtle: #1a1614;
+  --overlay: rgba(11, 9, 8, 0.75);
+
+  --text:   #f7f4f0;
+  --text-2: #c4bdb5;
+  --text-3: #857d75;
+  --text-4: #5a534c;
+  --text-5: #3d3832;
+
+  --amber:     #f5a623;
+  --amber-2:   #d48a0f;
+  --emerald:   #3dd68c;
+  --emerald-2: #0f9d5f;
+  --sky:       #3dafff;
+  --sky-2:     #1e7fcc;
+  --rose:      #ff6b7a;
+  --rose-2:    #d13d50;
+  --violet:    #b19cff;
+  --violet-2:  #7d5fff;
+  --coral:     #ff8c5a;
 }
 
+/* ─── Light theme ─── */
+:root[data-theme="light"] {
+  --bg: #faf7f2;
+  --bg-2: #f1ece4;
+  --surface: #ffffff;
+  --surface-2: #f5f0e8;
+  --surface-3: #ebe4d9;
+  --border: #e5dfd3;
+  --border-subtle: #f0eadf;
+  --overlay: rgba(250, 247, 242, 0.75);
+
+  --text:   #1a1411;
+  --text-2: #4a423a;
+  --text-3: #7a716a;
+  --text-4: #a39a90;
+  --text-5: #c4bdb5;
+
+  --amber:     #c97b00;
+  --amber-2:   #9a5d00;
+  --emerald:   #2a9d65;
+  --emerald-2: #167044;
+  --sky:       #2280bf;
+  --sky-2:     #15568b;
+  --rose:      #d83a4d;
+  --rose-2:    #9d2030;
+  --violet:    #7d5fd1;
+  --violet-2:  #5a3ca0;
+  --coral:     #d65a25;
+}
+
+/* ─── Tailwind theme bridge ─── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ═══════════════════════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════════════════════ */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
 }
+
+html, body { overflow-x: hidden; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.font-serif {
+  font-family: var(--font-serif), "Iowan Old Style", Georgia, serif;
+  font-feature-settings: "ss01";
+}
+.font-mono {
+  font-family: var(--font-mono), "SFMono-Regular", ui-monospace, monospace;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════════════
+   Texture — grain + ambient glow (dark mode only)
+   ═══════════════════════════════════════════════════════════ */
+
+/* 3.5% opacity SVG noise — the difference between digital and paper */
+[data-theme="dark"] .grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* Ambient glow — radial amber top, radial violet bottom-left, ≤8% opacity */
+[data-theme="dark"] .ambient-glow::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245,166,35,0.06), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 20% 100%, rgba(125,95,255,0.03), transparent 50%);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Keyframes — §III.4 Motion + §III.5 Iconography
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hand-drawn SVG check — the signature tick */
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+.draw-check path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: draw-check 0.35s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+/* Breathing dot — the only idle animation on the home screen */
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+.breathe { animation: breathe 2.5s ease-in-out infinite; }
+
+/* Ring pulse on step completion */
+@keyframes ring-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.ring-pulse { animation: ring-pulse 0.7s ease-out forwards; }
+
+/* ═══════════════════════════════════════════════════════════
+   Focus
+   ═══════════════════════════════════════════════════════════ */
+
+*:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Safe areas
+   ═══════════════════════════════════════════════════════════ */
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Reduced motion — §X Accessibility
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
