@@ -653,7 +653,7 @@ function PlanDetail({ plan, areas, onBack, onToggleStep, onTogglePhase }: {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}
-      className="relative z-10 max-w-xl mx-auto w-full px-5 py-8 pb-48 min-h-screen">
+      className="relative z-10 max-w-xl mx-auto w-full px-5 py-8 pb-60 min-h-screen">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-3)] mb-8 hover:text-[var(--text-2)] transition-colors">← Back</button>
 
       {/* HERO */}
@@ -1138,7 +1138,7 @@ function ReviewScreen({ areas, steps, plans, habits, journal, weeklyTargets, onS
   };
 
   return (
-    <div className="max-w-xl mx-auto px-5 py-8 pb-48">
+    <div className="max-w-xl mx-auto px-5 py-8 pb-60">
       <header className="mb-10">
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[var(--text-4)] mb-2">Week of {weekLabel}</p>
         <h1 className="font-serif text-[32px] leading-[1.05] font-semibold tracking-tight mb-3">A look back.</h1>
@@ -1591,7 +1591,7 @@ export default function Page() {
   // ═══════════════════════════════════════════════════════════════════
 
   const nowSurface = (
-    <div className="max-w-xl lg:max-w-[1100px] mx-auto px-4 lg:px-8 py-6 lg:py-8 pb-48">
+    <div className="max-w-xl lg:max-w-[1100px] mx-auto px-4 lg:px-8 py-6 lg:py-8 pb-60">
       <Header doneToday={doneToday} theme={theme} onToggleTheme={toggleTheme} syncStatus={syncStatus} />
       <p className="text-[11px] font-mono text-[var(--text-4)] mb-4">{shapeLine}</p>
       <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 mb-4 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1715,7 +1715,7 @@ export default function Page() {
     <PlanDetail plan={activePlan} areas={areas} onBack={() => setActivePlanId(null)}
       onToggleStep={togglePlanStep} onTogglePhase={togglePhaseExpanded} />
   ) : (
-    <div className="max-w-xl mx-auto px-4 py-8 pb-48">
+    <div className="max-w-xl mx-auto px-4 py-8 pb-60">
       <h1 className="font-serif text-[30px] leading-[1.05] font-semibold tracking-tight mb-8">Plans</h1>
       {plans.length > 0 ? (
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2">
@@ -1732,7 +1732,7 @@ export default function Page() {
   // ═══════════════════════════════════════════════════════════════════
 
   const habitsSurface = (
-    <div className="max-w-xl mx-auto px-4 py-8 pb-48">
+    <div className="max-w-xl mx-auto px-4 py-8 pb-60">
       <h1 className="font-serif text-[30px] leading-[1.05] font-semibold tracking-tight mb-8">Habits</h1>
       <HabitsStrip habits={habits} onToggle={toggleHabit} />
       <div className="mt-8">
@@ -1755,7 +1755,7 @@ export default function Page() {
   // ═══════════════════════════════════════════════════════════════════
 
   const journalSurface = (
-    <div className="max-w-xl mx-auto px-4 py-8 pb-48">
+    <div className="max-w-xl mx-auto px-4 py-8 pb-60">
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-serif text-[30px] leading-[1.05] font-semibold tracking-tight">Journal</h1>
         <button onClick={() => setShowJournalModal(true)} className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--surface)] border border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors" aria-label="New entry">
